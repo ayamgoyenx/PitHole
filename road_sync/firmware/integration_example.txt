@@ -1,0 +1,56 @@
+Contoh penempatan di main.c (sesuaikan handle dan pin hasil CubeMX):
+
+#include "road_sync.h"
+#include "fatfs.h"
+static RoadSync road;
+static FATFS road_fs;
+
+// Setelah MX_GPIO_Init, MX_SPIx_Init, MX_USARTx_UART_Init, MX_FATFS_Init:
+if (f_mount(&road_fs, "0:", 1) != FR_OK ||
+    !road_init(&road, DEVICE_ID_UNIK)) {
+    // Tampilkan SD_ERROR; jangan lanjut menganggap pencatatan berhasil.
+    Error_Handler();
+}
+
+// Saat algoritma IMU benar-benar mendeteksi satu kejadian jalan rusak:
+bool stored = road_log_imu(&road, gps_utc_seconds,
+                          gps_latitude_e7, gps_longitude_e7,
+                          imu_peak_mg, gps_fix_valid && gps_age_ms < 2000);
+// Tangani false: data belum tersimpan. Hindari memanggil untuk setiap sampel IMU.
+
+// Di loop/task aplikasi:
+road_tick(&road, HAL_GetTick());
+// Kuras ring buffer UART ESP, rakit baris hingga '\n' ke buffer 180 byte.
+// Buang baris overflow hingga '\n'. Hilangkan '\r'. Lalu:
+road_receive(&road, complete_uart_line, HAL_GetTick());
+
+if (gps_fix_valid && gps_age_ms < 2000 && gps_course_valid &&
+    road_warning(&road, gps_latitude_e7, gps_longitude_e7,
+                 gps_course_degrees, gps_speed_mps, HAL_GetTick())) {
+    // Mulai pulsa buzzer 300 ms memakai deadline/timer, tanpa HAL_Delay.
+}
+// Hasil vision hanya menyalakan buzzer: jangan panggil road_log_imu.
+
+Implementasi road_uart_send wajib ditambahkan ke proyek, contoh transmit IT:
+
+static uint8_t esp_tx[180];
+static volatile bool esp_tx_busy;
+bool road_uart_send(const char *line) {
+    size_t n = strlen(line);
+    if (esp_tx_busy || n >= sizeof esp_tx) return false;
+    memcpy(esp_tx, line, n);
+    esp_tx_busy = true;
+    if (HAL_UART_Transmit_IT(&huart_esp, esp_tx, (uint16_t)n) != HAL_OK) {
+        esp_tx_busy = false;
+        return false;
+    }
+    return true;
+}
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *h) {
+    if (h == &huart_esp) esp_tx_busy = false;
+}
+// Gabungkan dengan callback yang sudah ada; jangan definisikan dua kali.
+// Sertakan string.h. huart_esp merupakan placeholder, ganti dengan handle asli.
+// RX: gunakan HAL_UART_Receive_IT atau DMA + ring buffer.
+// ISR hanya memasukkan byte ke buffer; FatFs dan road_receive berjalan di main.
+// Tangani UART error/overrun dan aktifkan kembali receive.

@@ -1,0 +1,4 @@
+__pycache__/
+*.db
+*.db-*
+esp01/secrets.h
