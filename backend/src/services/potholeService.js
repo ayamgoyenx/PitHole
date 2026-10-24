@@ -1,8 +1,25 @@
 const { query, isPgConnected, memoryDb } = require('../db');
 const { getHaversineDistance } = require('../utils/haversine');
+const { findNearestRoadSegment, invalidateRoadHeatCache } = require('./roadService');
+const { reverseGeocode } = require('./geocoding');
+const { syncPothole, rebuildAll } = require('./streetPinService');
 
-// Radius batas deduplikasi spasial dalam meter
-const DEDUPLICATION_RADIUS_METERS = 3.0;
+const DEDUPLICATION_RADIUS_METERS = 5.0;
+
+async function resolveLocationMetadata(lat, lon) {
+  let segment = null;
+  try {
+    segment = await findNearestRoadSegment(lat, lon);
+  } catch (error) {
+    console.warn(`[Road snap] Could not find a nearby segment: ${error.message}`);
+  }
+
+  return {
+    segmentId: segment?.id ?? null,
+    segmentName: segment?.name ?? null,
+    needsReview: !segment,
+  };
+}
 
 /**
  * Memproses batch data upload dari ESP32 MicroSD dengan deduplikasi spasial
@@ -15,50 +32,62 @@ async function processBatchUpload(syncTime, potholes) {
     const lon = parseFloat(item.lon);
     const detectedAt = item.detected_at || syncTime || new Date().toISOString();
 
-    if (isNaN(lat) || isNaN(lon)) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
       continue;
     }
 
     if (isPgConnected()) {
-      // 1. Ambil seluruh data lubang di PostgreSQL
-      const allPotholesRes = await query('SELECT * FROM potholes');
-      const existingList = allPotholesRes.rows;
-
-      let match = null;
-      let minDistance = Infinity;
-
-      for (const existing of existingList) {
-        const dist = getHaversineDistance(lat, lon, existing.lat, existing.lon);
-        if (dist <= DEDUPLICATION_RADIUS_METERS && dist < minDistance) {
-          minDistance = dist;
-          match = existing;
-        }
-      }
-
+      const point = 'ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography';
+      const matchResult = await query(
+        `SELECT *, ST_Distance(ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography, ${point}) AS distance_m
+         FROM potholes
+         WHERE status = 'active'
+           AND ST_DWithin(ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography, ${point}, $3)
+         ORDER BY distance_m
+         LIMIT 1`,
+        [lat, lon, DEDUPLICATION_RADIUS_METERS]
+      );
+      const match = matchResult.rows[0];
       if (match) {
-        // Update koordinat terbobot rata-rata & report_count
-        const oldCount = match.report_count || 1;
-        const newCount = oldCount + 1;
-        const newLat = (match.lat * oldCount + lat) / newCount;
-        const newLon = (match.lon * oldCount + lon) / newCount;
-
-        const updateQuery = `
-          UPDATE potholes
-          SET lat = $1, lon = $2, report_count = $3, last_detected_at = $4, updated_at = CURRENT_TIMESTAMP
-          WHERE id = $5
-          RETURNING *;
-        `;
-        const updateRes = await query(updateQuery, [newLat, newLon, newCount, detectedAt, match.id]);
-        processedResults.push({ action: 'updated', pothole: updateRes.rows[0], distance: minDistance });
+        const updateRes = await query(
+          `UPDATE potholes
+           SET report_count = COALESCE(report_count, 1) + 1,
+               last_detected_at = $1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2
+           RETURNING *`,
+          [detectedAt, match.id]
+        );
+        await syncPothole(match.id, lat, lon);
+        processedResults.push({ action: 'updated', pothole: updateRes.rows[0], distance: Number(match.distance_m) });
       } else {
-        // Insert data baru
-        const insertQuery = `
-          INSERT INTO potholes (lat, lon, report_count, status, first_detected_at, last_detected_at, updated_at, validation_methods)
-          VALUES ($1, $2, 1, 'active', $3, $3, CURRENT_TIMESTAMP, $4)
-          RETURNING *;
-        `;
-        const insertRes = await query(insertQuery, [lat, lon, detectedAt, JSON.stringify(['camera', 'imu'])]);
-        processedResults.push({ action: 'created', pothole: insertRes.rows[0] });
+        const location = await resolveLocationMetadata(lat, lon);
+        const insertRes = await query(
+          `INSERT INTO potholes
+             (lat, lon, report_count, status, first_detected_at, last_detected_at,
+              repaired_at, updated_at, validation_methods, location_name, segment_id, needs_review)
+           VALUES ($1, $2, 1, 'active', $3, $3, NULL, CURRENT_TIMESTAMP, $4, NULL, $5, $6)
+           RETURNING *`,
+          [lat, lon, detectedAt, JSON.stringify(['camera', 'imu']), location.segmentId, location.needsReview]
+        );
+        let pothole = insertRes.rows[0];
+        try {
+          const locationName = await reverseGeocode(lat, lon, location.segmentName);
+          if (locationName) {
+            const named = await query(
+              'UPDATE potholes SET location_name = $1 WHERE id = $2 RETURNING *',
+              [locationName, pothole.id]
+            );
+            pothole = named.rows[0] || pothole;
+          }
+        } catch (error) {
+          console.warn(`[Geocoding] Pothole ${pothole.id} saved without a location name: ${error.message}`);
+        }
+        await syncPothole(pothole.id, lat, lon, {
+          idLocation: location.segmentId,
+          locationName: pothole.location_name || location.segmentName || null,
+        });
+        processedResults.push({ action: 'created', pothole });
       }
     } else {
       // Mode In-Memory Fallback
@@ -66,6 +95,7 @@ async function processBatchUpload(syncTime, potholes) {
       let minDistance = Infinity;
 
       for (const existing of memoryDb.potholes) {
+        if (existing.status !== 'active') continue;
         const dist = getHaversineDistance(lat, lon, existing.lat, existing.lon);
         if (dist <= DEDUPLICATION_RADIUS_METERS && dist < minDistance) {
           minDistance = dist;
@@ -74,15 +104,12 @@ async function processBatchUpload(syncTime, potholes) {
       }
 
       if (match) {
-        const oldCount = match.report_count || 1;
-        const newCount = oldCount + 1;
-        match.lat = (match.lat * oldCount + lat) / newCount;
-        match.lon = (match.lon * oldCount + lon) / newCount;
-        match.report_count = newCount;
+        match.report_count = (match.report_count || 1) + 1;
         match.last_detected_at = detectedAt;
         match.updated_at = new Date().toISOString();
         processedResults.push({ action: 'updated', pothole: match, distance: minDistance });
       } else {
+        const location = await resolveLocationMetadata(lat, lon);
         const newPothole = {
           id: memoryDb.nextId++,
           lat,
@@ -91,15 +118,25 @@ async function processBatchUpload(syncTime, potholes) {
           status: 'active',
           first_detected_at: detectedAt,
           last_detected_at: detectedAt,
+          repaired_at: null,
+          location_name: null,
+          segment_id: location.segmentId,
+          needs_review: location.needsReview,
           updated_at: new Date().toISOString(),
           validation_methods: ['camera', 'imu'],
         };
         memoryDb.potholes.push(newPothole);
+        try {
+          newPothole.location_name = await reverseGeocode(lat, lon, location.segmentName);
+        } catch (error) {
+          console.warn(`[Geocoding] Pothole ${newPothole.id} saved without a location name: ${error.message}`);
+        }
         processedResults.push({ action: 'created', pothole: newPothole });
       }
     }
   }
 
+  if (processedResults.length) invalidateRoadHeatCache();
   return processedResults;
 }
 
@@ -129,9 +166,12 @@ async function getSyncData(lastSync) {
 /**
  * Mendapatkan seluruh daftar potholes untuk frontend React
  */
+const POTHOLE_WITH_STREET_SQL = `SELECT p.*, rs.name AS street_name
+  FROM potholes p LEFT JOIN road_segments rs ON rs.id = p.segment_id`;
+
 async function getAllPotholes() {
   if (isPgConnected()) {
-    const res = await query('SELECT * FROM potholes ORDER BY id DESC');
+    const res = await query(`${POTHOLE_WITH_STREET_SQL} ORDER BY p.id DESC`);
     return res.rows;
   } else {
     return [...memoryDb.potholes].sort((a, b) => b.id - a.id);
@@ -143,7 +183,7 @@ async function getAllPotholes() {
  */
 async function getPotholeById(id) {
   if (isPgConnected()) {
-    const res = await query('SELECT * FROM potholes WHERE id = $1', [id]);
+    const res = await query(`${POTHOLE_WITH_STREET_SQL} WHERE p.id = $1`, [id]);
     return res.rows[0] || null;
   } else {
     return memoryDb.potholes.find((p) => p.id === parseInt(id, 10)) || null;
@@ -161,15 +201,33 @@ async function updatePotholeStatus(id, status) {
 
   if (isPgConnected()) {
     const res = await query(
-      'UPDATE potholes SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      `UPDATE potholes
+       SET status = $1::varchar,
+           repaired_at = CASE
+             WHEN $1::varchar = 'repaired' AND status <> 'repaired' THEN CURRENT_TIMESTAMP
+             WHEN $1::varchar = 'repaired' THEN repaired_at
+             ELSE NULL
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
       [status, id]
     );
-    return res.rows[0] || null;
+    if (!res.rows[0]) return null;
+    await syncPothole(res.rows[0].id, res.rows[0].lat, res.rows[0].lon);
+    invalidateRoadHeatCache();
+    return getPotholeById(id);
   } else {
     const pothole = memoryDb.potholes.find((p) => p.id === parseInt(id, 10));
     if (pothole) {
+      if (status === 'repaired' && pothole.status !== 'repaired') {
+        pothole.repaired_at = new Date().toISOString();
+      } else if (status !== 'repaired') {
+        pothole.repaired_at = null;
+      }
       pothole.status = status;
       pothole.updated_at = new Date().toISOString();
+      invalidateRoadHeatCache();
       return pothole;
     }
     return null;
@@ -189,6 +247,7 @@ async function seedInitialPotholes() {
       status: 'repaired',
       first_detected_at: '2026-05-01T08:00:00Z',
       last_detected_at: '2026-05-01T08:00:00Z',
+      repaired_at: null,
       validation_methods: ['camera', 'imu'],
     },
     {
@@ -199,6 +258,7 @@ async function seedInitialPotholes() {
       status: 'active',
       first_detected_at: '2026-05-07T14:23:15Z',
       last_detected_at: '2026-05-07T14:23:15Z',
+      repaired_at: null,
       validation_methods: ['camera', 'imu'],
     },
     {
@@ -209,6 +269,7 @@ async function seedInitialPotholes() {
       status: 'active',
       first_detected_at: '2026-05-08T09:10:00Z',
       last_detected_at: '2026-05-08T09:10:00Z',
+      repaired_at: null,
       validation_methods: ['camera', 'imu'],
     },
     {
@@ -219,6 +280,7 @@ async function seedInitialPotholes() {
       status: 'in_progress',
       first_detected_at: '2026-05-09T11:45:00Z',
       last_detected_at: '2026-05-09T11:45:00Z',
+      repaired_at: null,
       validation_methods: ['camera', 'imu'],
     },
     {
@@ -229,13 +291,14 @@ async function seedInitialPotholes() {
       status: 'active',
       first_detected_at: '2026-05-10T16:00:00Z',
       last_detected_at: '2026-05-10T16:00:00Z',
+      repaired_at: null,
       validation_methods: ['camera', 'imu'],
     },
   ];
 
   if (isPgConnected()) {
     // Clear & seed PostgreSQL table
-    await query('TRUNCATE TABLE potholes RESTART IDENTITY');
+    await query('TRUNCATE TABLE potholes RESTART IDENTITY CASCADE');
     for (const p of seedPotholes) {
       await query(
         `INSERT INTO potholes (lat, lon, report_count, status, first_detected_at, last_detected_at, updated_at, validation_methods)
@@ -251,7 +314,46 @@ async function seedInitialPotholes() {
     memoryDb.nextId = 6;
   }
 
+  await fillMissingLocationMetadata();
+  try {
+    await rebuildAll();
+  } catch (error) {
+    console.warn(`[Street pin] Rebuild skipped (run npm run migrate): ${error.message}`);
+  }
+  invalidateRoadHeatCache();
   return seedPotholes;
+}
+
+/**
+ * Untuk pothole yang diinput manual / tanpa segment: cari segment terdekat (25 m),
+ * lalu isi location_name (nama segment, atau reverse geocode) jika masih kosong.
+ */
+async function fillMissingLocationMetadata() {
+  if (!isPgConnected()) return 0;
+  const rows = (await query(
+    `SELECT id, lat, lon, location_name FROM potholes
+     WHERE segment_id IS NULL OR location_name IS NULL`
+  )).rows;
+
+  let touched = 0;
+  for (const row of rows) {
+    const location = await resolveLocationMetadata(row.lat, row.lon);
+    let name = row.location_name || location.segmentName;
+    if (!name) {
+      try {
+        name = await reverseGeocode(row.lat, row.lon, null);
+      } catch (error) {
+        console.warn(`[Geocoding] Pothole ${row.id}: ${error.message}`);
+      }
+    }
+    await query(
+      'UPDATE potholes SET segment_id = $1, needs_review = $2, location_name = $3 WHERE id = $4',
+      [location.segmentId, location.needsReview, name || null, row.id]
+    );
+    touched++;
+  }
+  if (touched) invalidateRoadHeatCache();
+  return touched;
 }
 
 module.exports = {
@@ -261,4 +363,5 @@ module.exports = {
   getPotholeById,
   updatePotholeStatus,
   seedInitialPotholes,
+  fillMissingLocationMetadata,
 };

@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 760" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="800" y1="0" x2="800" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCEFFA"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="610" x2="0" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DCEFFA"/>
+      <stop offset="1" stop-color="#F0F4F9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="760" fill="url(#sky)"/>
+  <!-- Soft clouds -->
+  <g fill="#DCEFFA" opacity=".92">
+    <path d="M-30 210c4-44 39-78 83-78 32 0 59 18 73 45 11-8 24-12 39-12 34 0 62 25 67 57H-30Z"/>
+    <path d="M1280 174c7-34 37-59 73-59 29 0 54 16 66 40 10-6 21-9 33-9 29 0 53 20 58 47h-230Z"/>
+    <path d="M1425 265c7-27 31-47 60-47 22 0 42 12 52 31 8-5 17-7 27-7 23 0 43 16 47 38h-186Z" opacity=".7"/>
+  </g>
+  <!-- Distant skyline -->
+  <g fill="#C9E2F2" opacity=".54">
+    <path d="M0 510h65V405h42v105h24V449h55v61h34V374h57v136h25V430h51v80h33V467h57v43h33V393h46v117h30V442h56v68h34V415h47v95h31V462h57v48h35V382h52v128h31V432h50v78h38V405h54v105h35V458h58v52h28V426h47v84h30V380h58v130h28V448h45v62h28v-30h43v30h34v-76h55v76h30V420h47v90h28v-55h45v55h33v-92h42v92h20v35H0Z"/>
+    <path d="M102 405h57v-26h-57zM365 467h44v-22h-44zM693 415h39v-19h-39zM1095 432h54v-26h-54zM1370 390h40v-25h-40z" fill="#B8D6EA"/>
+  </g>
+  <!-- Low green-blue shrubs -->
+  <path d="M0 574c36-27 69-23 100-2 24-37 72-44 104-9 36-23 75-13 95 10 40-32 89-25 115 3 35-28 77-25 108 0 40-27 82-20 110 2 31-25 72-24 99 0 40-26 78-23 106 1 36-26 77-20 104 1 38-28 84-19 108 4 34-28 73-23 99 1 39-28 80-21 110 2 36-24 71-18 102 2 35-25 70-22 100 3v68H0Z" fill="#B5D9D0"/>
+  <path d="M0 601c35-28 71-21 97 1 28-24 66-20 89 2 30-21 68-17 90 3 36-24 75-20 99 2 35-20 68-17 96 1 36-25 75-19 100 1 35-21 70-18 98 2 36-23 74-19 100 1 36-23 76-19 100 2 31-20 70-17 97 1 34-21 70-16 94 2 35-24 76-20 102 1 33-20 69-16 95 3 32-19 66-16 93 3 27-17 56-16 80 1v55H0Z" fill="#5B7A99" opacity=".52"/>
+  <!-- Small trees -->
+  <g stroke="#123A63" stroke-width="4" stroke-linecap="round" opacity=".55">
+    <path d="M130 603v-83M1465 604v-91"/>
+  </g>
+  <g fill="#5B7A99" opacity=".8">
+    <path d="M130 514c-38-26-33-65 0-84 30 24 37 59 0 84Z"/>
+    <path d="M1465 519c-36-24-31-60 0-78 29 22 34 54 0 78Z"/>
+  </g>
+  <!-- Road -->
+  <rect y="610" width="1600" height="150" fill="url(#road)"/>
+  <path d="M0 610H1600" stroke="#5B7A99" stroke-width="5" opacity=".7"/>
+  <path d="M0 652H1600" stroke="#FFFFFF" stroke-width="6" opacity=".9"/>
+  <path d="M0 707H1600" stroke="#FFFFFF" stroke-width="4" opacity=".8"/>
+  <g fill="#FFFFFF" opacity=".85">
+    <rect x="55" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="245" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="435" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="625" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="815" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="1005" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="1195" y="672" width="95" height="7" rx="3.5"/>
+    <rect x="1385" y="672" width="95" height="7" rx="3.5"/>
+  </g>
+  <!-- Pothole hazard -->
+  <ellipse cx="1230" cy="614" rx="61" ry="11" fill="#123A63" opacity=".14"/>
+  <path d="M1165 610c15-17 35-26 65-26 31 0 51 9 66 26-30 12-100 12-131 0Z" fill="#0C2846"/>
+  <path d="M1181 607c19-9 77-9 98 0-25 5-73 5-98 0Z" fill="#5B7A99"/>
+  <g stroke="#FFD21F" stroke-width="8" stroke-linecap="round">
+    <path d="M1194 565l-9-13"/>
+    <path d="M1230 554v-17"/>
+    <path d="M1266 565l10-13"/>
+  </g>
+  <!-- Motion route -->
+  <path d="M120 646C245 620 315 630 418 646S610 661 726 646" stroke="#FFD21F" stroke-width="5" stroke-linecap="round" opacity=".95"/>
+</svg>

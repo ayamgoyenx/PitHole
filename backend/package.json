@@ -4,13 +4,21 @@
   "main": "index.js",
   "scripts": {
     "start": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "migrate": "node scripts/runMigrations.js",
+    "import-roads": "node scripts/importRoads.js",
+    "backfill-location-names": "node scripts/backfillLocationNames.js",
+    "rebuild-street-pins": "node scripts/rebuildStreetPins.js",
+    "create-admin": "node scripts/createAdmin.js",
+    "seed": "node scripts/seedPotholes.js",
+    "seed:clear": "node scripts/seedPotholes.js --clear",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
