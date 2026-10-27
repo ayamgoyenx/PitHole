@@ -1,0 +1,172 @@
+.about-page {
+  min-height: 100vh;
+  color: #0c2846;
+  font-family: var(--font-sans);
+}
+
+.about-main {
+  min-height: calc(100svh - 68px);
+  overflow: hidden;
+  background: #f0f4f9;
+}
+
+.about-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: calc(100svh - 68px);
+  overflow: hidden;
+  background: linear-gradient(180deg, #fff 0%, #f0f4f9 100%);
+}
+
+.about-background {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  pointer-events: none;
+}
+
+.about-overlay {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.58) 0%,
+    rgba(255, 255, 255, 0.2) 55%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+.about-copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: clamp(28px, 5vh, 48px) 20px 0;
+  text-align: center;
+}
+
+.about-copy-inner {
+  width: min(100%, 860px);
+}
+
+.about-heading {
+  color: #142943;
+  font-size: clamp(2.25rem, 5.2vw, 3.75rem);
+  font-weight: 800;
+  line-height: 1.04;
+}
+
+.about-logo {
+  display: block;
+  width: clamp(210px, 26vw, 320px);
+  height: auto;
+  margin: 8px auto 0;
+}
+
+.about-description {
+  max-width: 470px;
+  margin: 14px auto 0;
+  color: #5b7a99;
+  font-size: clamp(0.9rem, 1.35vw, 1.05rem);
+  line-height: 1.55;
+}
+
+.about-cyclist {
+  position: absolute;
+  z-index: 2;
+  bottom: 10%;
+  left: 30%;
+  width: clamp(150px, 17vw, 230px);
+  height: auto;
+  filter: drop-shadow(0 5px 5px rgba(18, 58, 99, 0.12));
+  pointer-events: none;
+}
+
+.about-scroll-button {
+  position: absolute;
+  z-index: 3;
+  bottom: 16px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  color: #123a63;
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.about-scroll-button:hover {
+  transform: translate(-50%, -3px);
+  background: #fff;
+}
+
+.about-scroll-button:focus-visible {
+  outline: 3px solid #fdd402;
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .about-main,
+  .about-hero {
+    min-height: calc(100svh - 50px);
+  }
+
+  .about-copy {
+    padding: 48px 18px 180px;
+  }
+
+  .about-heading {
+    font-size: clamp(2rem, 8vw, 3rem);
+  }
+
+  .about-logo {
+    width: min(68vw, 260px);
+    margin-top: 10px;
+  }
+
+  .about-description {
+    max-width: 360px;
+    margin-top: 12px;
+    font-size: 0.95rem;
+  }
+
+  .about-cyclist {
+    bottom: 11%;
+    left: 5%;
+    width: clamp(140px, 34vw, 190px);
+  }
+}
+
+@media (max-width: 380px) {
+  .about-copy {
+    padding-top: 38px;
+  }
+
+  .about-heading {
+    font-size: 1.9rem;
+  }
+
+  .about-cyclist {
+    left: 2%;
+    width: 138px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .about-scroll-button {
+    transition: none;
+  }
+}

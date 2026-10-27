@@ -2,14 +2,23 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 // Konfigurasi pool PostgreSQL dari variabel lingkungan
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'pithole_db',
-  connectionTimeoutMillis: 5000,
-});
+// DATABASE_URL (e.g. Supabase) takes priority over the separate DB_* variables
+const pool = new Pool(
+  process.env.DB_URL
+    ? {
+      connectionString: process.env.DB_URL,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 10000,
+    }
+    : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || 'postgres',
+      database: process.env.DB_NAME || 'pithole_db',
+      connectionTimeoutMillis: 5000,
+    }
+);
 
 let isPgConnected = false;
 // Storage fallback jika database PostgreSQL belum berjalan di sistem pengguna
@@ -37,12 +46,14 @@ async function initDb() {
         status VARCHAR(50) DEFAULT 'active',
         first_detected_at TIMESTAMPTZ NOT NULL,
         last_detected_at TIMESTAMPTZ NOT NULL,
+        repaired_at TIMESTAMPTZ,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         validation_methods JSONB DEFAULT '["camera", "imu"]'::jsonb
       );
     `;
 
     await client.query(createTableQuery);
+    await client.query('ALTER TABLE potholes ADD COLUMN IF NOT EXISTS repaired_at TIMESTAMPTZ');
     console.log('[Database] Tabel "potholes" di PostgreSQL siap digunakan.');
     client.release();
   } catch (err) {

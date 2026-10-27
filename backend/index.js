@@ -4,6 +4,9 @@ require('dotenv').config();
 
 const { initDb } = require('./src/db');
 const potholeService = require('./src/services/potholeService');
+const adminAuth = require('./src/utils/adminAuth');
+const roadService = require('./src/services/roadService');
+const streetPinService = require('./src/services/streetPinService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -14,12 +17,45 @@ app.use(express.json());
 // Inisialisasi Database saat Server Mulai
 initDb().then(() => {
   // Auto-seed data UGM jika database masih kosong
-  potholeService.getAllPotholes().then((list) => {
+  potholeService.getAllPotholes().then(async (list) => {
     if (list.length === 0) {
       console.log('[Init] Mengisi data seed awal area UGM...');
-      potholeService.seedInitialPotholes();
+      await potholeService.seedInitialPotholes();
+    } else {
+      await potholeService.fillMissingLocationMetadata();
+      await streetPinService.rebuildAll();
     }
-  });
+  }).catch((error) => console.error('[Init] Gagal melengkapi data lokasi:', error.message));
+});
+
+app.get('/api/v1/street-pins', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=15');
+  try {
+    const pins = await streetPinService.getStreetPins({ level: req.query.level, bbox: req.query.bbox });
+    return res.json({
+      status: 'success',
+      config: streetPinService.publicConfig(),
+      count: pins.length,
+      pins: pins.map((pin) => ({
+        id_location: pin.id_location,
+        location_key: pin.location_key,
+        location_name: pin.location_name,
+        level: pin.level,
+        hole_count: pin.hole_count,
+        length_m: Math.round(Number(pin.length_m) * 10) / 10,
+        density_per_100m: Math.round(Number(pin.density_per_100m) * 100) / 100,
+        lat: pin.lat,
+        lon: pin.lon,
+      })),
+    });
+  } catch (error) {
+    console.error('Error get street pins:', error);
+    return res.status(500).json({ status: 'error', message: 'Pin jalan gagal dimuat.' });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.json({ message: 'PitHole API berjalan', endpoints: ['/api/hello', '/api/v1/potholes', '/api/road-heat'] });
 });
 
 // Endpoint Health Check
@@ -28,6 +64,42 @@ app.get('/api/hello', (req, res) => {
     message: 'Backend Express & Database PitHole UGM Berhasil Jalan!',
     timestamp: new Date().toISOString(),
   });
+});
+
+app.post('/api/v1/admin/login', async (req, res) => {
+  if (!adminAuth.isConfigured()) {
+    console.error('[Admin] ADMIN_SESSION_SECRET is missing or invalid (needs 32+ chars).');
+    return res.status(500).json({ status: 'error', message: 'Something went wrong. Please try again later.' });
+  }
+
+  try {
+    const { username, password } = req.body || {};
+    if (!(await adminAuth.verifyCredentials(username, password))) {
+      return res.status(401).json({ status: 'error', message: 'Username or password is incorrect.' });
+    }
+
+    res.setHeader('Set-Cookie', adminAuth.sessionCookie(req, adminAuth.createSessionToken(username)));
+    return res.json({ status: 'success', admin: { username } });
+  } catch (error) {
+    console.error('[Admin] Login failed:', error.message);
+    return res.status(500).json({ status: 'error', message: 'Something went wrong. Please try again later.' });
+  }
+});
+
+app.get('/api/v1/admin/session', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!adminAuth.isConfigured()) {
+    console.error('[Admin] ADMIN_SESSION_SECRET is missing or invalid (needs 32+ chars).');
+    return res.status(500).json({ status: 'error', message: 'Something went wrong. Please try again later.' });
+  }
+  const session = adminAuth.readSession(req);
+  if (!session) return res.status(401).json({ status: 'error', message: 'Admin session required.' });
+  return res.json({ status: 'success', admin: { username: session.sub } });
+});
+
+app.post('/api/v1/admin/logout', (req, res) => {
+  res.setHeader('Set-Cookie', adminAuth.sessionCookie(req, '', 0));
+  return res.json({ status: 'success' });
 });
 
 /**
@@ -131,7 +203,7 @@ app.get('/api/v1/potholes/:id', async (req, res) => {
  * 5. Endpoint Update Status Pothole (Admin)
  * PATCH /api/v1/potholes/:id/status
  */
-app.patch('/api/v1/potholes/:id/status', async (req, res) => {
+app.patch('/api/v1/potholes/:id/status', adminAuth.requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -157,7 +229,7 @@ app.patch('/api/v1/potholes/:id/status', async (req, res) => {
  * 6. Endpoint Seed Data Dummy Area UGM (Untuk Testing)
  * POST /api/v1/potholes/seed
  */
-app.post('/api/v1/potholes/seed', async (req, res) => {
+app.post('/api/v1/potholes/seed', adminAuth.requireAdmin, async (req, res) => {
   try {
     const seeded = await potholeService.seedInitialPotholes();
     res.status(200).json({
@@ -169,6 +241,16 @@ app.post('/api/v1/potholes/seed', async (req, res) => {
   } catch (error) {
     console.error('Error seed:', error);
     res.status(500).json({ status: 'error', message: error.message });
+  }
+});
+
+app.get('/api/road-heat', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=30');
+  try {
+    return res.json(await roadService.getRoadHeatGeoJSON());
+  } catch (error) {
+    console.error('Error get road heat:', error);
+    return res.status(500).json({ status: 'error', message: 'Peta panas jalan gagal dimuat.' });
   }
 });
 
