@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Cpu, Send, RefreshCw, X } from 'lucide-react';
+import { apiUrl } from '../api';
 
 export default function IoTTestModal({ onRefreshData }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +28,7 @@ export default function IoTTestModal({ onRefreshData }) {
         ],
       };
 
-      const res = await fetch('http://localhost:5000/api/v1/potholes/batch-upload', {
+      const res = await fetch(apiUrl('/api/v1/potholes/batch-upload'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -51,8 +52,9 @@ export default function IoTTestModal({ onRefreshData }) {
     setLoading(true);
     setMessage('');
     try {
-      const res = await fetch('http://localhost:5000/api/v1/potholes/seed', {
+      const res = await fetch(apiUrl('/api/v1/potholes/seed'), {
         method: 'POST',
+        credentials: 'include',
       });
       const data = await res.json();
       if (res.ok) {

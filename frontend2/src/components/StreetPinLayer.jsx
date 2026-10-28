@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { LEVEL_COLORS, LEVEL_LABELS } from './streetPinConstants';
+import { apiUrl } from '../api';
 
 const REFRESH_MS = 30000;
 const MOVE_DEBOUNCE_MS = 300;
@@ -48,7 +49,7 @@ export default function StreetPinLayer({ enabled, refreshKey, onStatusChange }) 
       const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
       if (firstLoad) statusRef.current({ state: 'loading', config: null });
 
-      fetch(`/api/v1/street-pins?bbox=${encodeURIComponent(bbox)}`, { signal: controller.signal })
+      fetch(apiUrl(`/api/v1/street-pins?bbox=${encodeURIComponent(bbox)}`), { signal: controller.signal })
         .then(async (response) => {
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.message || 'Gagal memuat pin jalan.');

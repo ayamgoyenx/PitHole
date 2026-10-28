@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, MapPinned, Menu, X } from 'lucide-react';
 import logo from '../../assets/logo.svg';
+import { apiUrl } from '../../api';
 import './admin.css';
 
 const navigation = [
@@ -18,7 +19,7 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
   useEffect(() => {
     let active = true;
     const verifySession = () => {
-      fetch('/api/v1/admin/session', { credentials: 'include', cache: 'no-store' })
+      fetch(apiUrl('/api/v1/admin/session'), { credentials: 'include', cache: 'no-store' })
         .then(async (response) => {
           if (!active) return;
           if (response.ok) {
@@ -53,7 +54,7 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
   }, [navigate]);
 
   const handleLogout = async () => {
-    await fetch('/api/v1/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    await fetch(apiUrl('/api/v1/admin/logout'), { method: 'POST', credentials: 'include' }).catch(() => {});
     navigate('/admin-login', { replace: true });
   };
 

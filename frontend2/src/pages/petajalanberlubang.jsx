@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import MapView from '../components/MapView';
 import PotholeList from '../components/PotholeList';
 import PotholeDetail from '../components/PotholeDetail';
+import { apiUrl } from '../api';
 import './petajalanberlubang.css';
 
 export default function PetaJalanBerlubang({ lastSyncText = '5 menit yang lalu' }) {
@@ -20,7 +21,7 @@ export default function PetaJalanBerlubang({ lastSyncText = '5 menit yang lalu' 
 
   const fetchPotholes = async () => {
     try {
-      const response = await fetch('/api/v1/potholes');
+      const response = await fetch(apiUrl('/api/v1/potholes'));
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || 'Gagal memuat data lubang.');
       setError('');

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/logo.svg';
+import { apiUrl } from '../../api';
 import './admin.css';
 import background from '../../assets/background.svg';
 
@@ -30,7 +31,7 @@ export default function AdminLogin() {
     setSubmitting(true);
     try {
       //mengirim request login ke server dengan username dan password
-      const response = await fetch('/api/v1/admin/login', {
+      const response = await fetch(apiUrl('/api/v1/admin/login'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },

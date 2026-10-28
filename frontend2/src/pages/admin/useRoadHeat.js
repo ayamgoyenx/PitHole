@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl } from '../../api';
 
 // Admin hanya menampilkan ruas bermasalah: parah dan sedang (label 'mid' dipertahankan untuk UI admin)
 const LEVEL_MAP = { severe: 'severe', medium: 'mid' };
@@ -11,7 +12,7 @@ export default function useRoadHeat(refreshKey) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/api/v1/street-pins?level=severe,medium', { cache: 'no-store', signal: controller.signal })
+    fetch(apiUrl('/api/v1/street-pins?level=severe,medium'), { cache: 'no-store', signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json();
         if (!response.ok) throw new Error('gagal');

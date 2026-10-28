@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { apiUrl } from '../../api';
 
-const API_URL = '/api/v1/potholes';
+const API_URL = apiUrl('/api/v1/potholes');
 
 export default function useAdminPotholes() {
   const [potholes, setPotholes] = useState([]);
@@ -35,6 +36,7 @@ export default function useAdminPotholes() {
   const updateStatus = async (id, status) => {
     const response = await fetch(`${API_URL}/${id}/status`, {
       method: 'PATCH',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
