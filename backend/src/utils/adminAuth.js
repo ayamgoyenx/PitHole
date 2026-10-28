@@ -90,14 +90,17 @@ function readSession(req) {
 // 2. tambahkan atribut Secure kalau di production
 // 3. gabungkan atribut menjadi string cookie
 function sessionCookie(req, token, maxAge = SESSION_SECONDS) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  // Frontend and backend are on different sites in production, so the cookie must be
+  // SameSite=None (which browsers only accept together with Secure).
   const attributes = [
     `${COOKIE_NAME}=${token}`,
     'HttpOnly',
-    'SameSite=Strict',
+    `SameSite=${isProduction ? 'None' : 'Strict'}`,
     'Path=/',
     `Max-Age=${maxAge}`,
   ];
-  if (process.env.NODE_ENV === 'production') attributes.push('Secure');
+  if (isProduction) attributes.push('Secure');
   return attributes.join('; ');
 }
 
