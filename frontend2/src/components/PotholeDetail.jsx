@@ -97,7 +97,7 @@ export default function PotholeDetail({ pothole, onBack }) {
           </div> : <p className="detail-location-unknown">Lokasi peta tidak tersedia.</p>}
 
           <div style={{ fontSize: '14px', color: '#0F172A', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <p><strong>Lokasi:</strong> {pothole.location_name || 'Lokasi tidak diketahui'}</p>
+            <p><strong>Lokasi:</strong> {pothole.location_name || pothole.street_name || 'Nama lokasi belum tersedia'}</p>
             {hasCoordinates && <p style={{ fontSize: '12px', color: '#64748B' }}>
               {latitude.toFixed(5)}, {longitude.toFixed(5)}
             </p>}

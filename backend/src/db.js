@@ -54,7 +54,14 @@ async function initDb() {
 
     await client.query(createTableQuery);
     await client.query('ALTER TABLE potholes ADD COLUMN IF NOT EXISTS repaired_at TIMESTAMPTZ');
-    console.log('[Database] Tabel "potholes" di PostgreSQL siap digunakan.');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pothole_events (
+        event_id   VARCHAR(80) PRIMARY KEY,
+        pothole_id INT REFERENCES potholes(id) ON DELETE SET NULL,
+        received_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('[Database] Tabel "potholes" dan "pothole_events" di PostgreSQL siap digunakan.');
     client.release();
   } catch (err) {
     isPgConnected = false;
