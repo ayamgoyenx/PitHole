@@ -3,6 +3,8 @@ const MIN_NOMINATIM_INTERVAL_MS = 1000;
 
 let requestQueue = Promise.resolve();
 let lastRequestStartedAt = 0;
+let warnedMissingUserAgent = false;
+const addressCache = new Map();
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -46,7 +48,10 @@ async function requestNominatim(lat, lon, userAgent) {
       },
       signal: AbortSignal.timeout(10000),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.warn(`[Geocoding] Nominatim HTTP ${response.status} for ${lat},${lon}; location name remains pending.`);
+      return null;
+    }
 
     const result = await response.json();
     return formatAddress(result.address);
@@ -61,12 +66,28 @@ async function reverseGeocode(lat, lon, roadSegmentName = null) {
     return roadSegmentName.trim();
   }
 
-  const userAgent = process.env.NOMINATIM_USER_AGENT;
-  if (!userAgent || userAgent.startsWith('replace-with-')) return null;
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) return null;
+  const userAgent = process.env.NOMINATIM_USER_AGENT?.trim();
+  if (!userAgent || userAgent.startsWith('replace-with-')) {
+    if (!warnedMissingUserAgent) {
+      console.warn('[Geocoding] Set NOMINATIM_USER_AGENT on the backend service to enable location names outside imported road segments.');
+      warnedMissingUserAgent = true;
+    }
+    return null;
+  }
+  if (lat == null || lon == null || lat === '' || lon === ''
+      || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))
+      || Math.abs(Number(lat)) > 90 || Math.abs(Number(lon)) > 180) return null;
+
+  const key = `${Number(lat)},${Number(lon)}`;
+  if (addressCache.has(key)) return addressCache.get(key);
 
   try {
-    return await requestNominatim(Number(lat), Number(lon), userAgent);
+    const name = await requestNominatim(Number(lat), Number(lon), userAgent);
+    if (name) {
+      if (addressCache.size >= 2000) addressCache.delete(addressCache.keys().next().value);
+      addressCache.set(key, name);
+    }
+    return name;
   } catch (error) {
     console.warn(`[Geocoding] Reverse lookup failed: ${error.message}`);
     return null;

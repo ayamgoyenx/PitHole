@@ -31,9 +31,22 @@ async function processBatchUpload(syncTime, potholes) {
     const lat = parseFloat(item.lat);
     const lon = parseFloat(item.lon);
     const detectedAt = item.detected_at || syncTime || new Date().toISOString();
+    const eventId = item.event_id || null;
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
       continue;
+    }
+
+    // --- IDEMPOTENCY: cek apakah event_id ini sudah pernah diproses ---
+    if (eventId && isPgConnected()) {
+      const dupCheck = await query(
+        'SELECT pothole_id FROM pothole_events WHERE event_id = $1',
+        [eventId]
+      );
+      if (dupCheck.rows.length > 0) {
+        processedResults.push({ action: 'duplicate', event_id: eventId, pothole_id: dupCheck.rows[0].pothole_id });
+        continue;
+      }
     }
 
     if (isPgConnected()) {
@@ -59,7 +72,15 @@ async function processBatchUpload(syncTime, potholes) {
           [detectedAt, match.id]
         );
         await syncPothole(match.id, lat, lon);
-        processedResults.push({ action: 'updated', pothole: updateRes.rows[0], distance: Number(match.distance_m) });
+        const updatedPothole = updateRes.rows[0];
+        // Catat event_id agar kirim-ulang tidak menaikkan report_count lagi
+        if (eventId) {
+          await query(
+            'INSERT INTO pothole_events (event_id, pothole_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [eventId, updatedPothole.id]
+          );
+        }
+        processedResults.push({ action: 'updated', pothole: updatedPothole, distance: Number(match.distance_m) });
       } else {
         const location = await resolveLocationMetadata(lat, lon);
         const insertRes = await query(
@@ -87,6 +108,13 @@ async function processBatchUpload(syncTime, potholes) {
           idLocation: location.segmentId,
           locationName: pothole.location_name || location.segmentName || null,
         });
+        // Catat event_id untuk lubang baru
+        if (eventId) {
+          await query(
+            'INSERT INTO pothole_events (event_id, pothole_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [eventId, pothole.id]
+          );
+        }
         processedResults.push({ action: 'created', pothole });
       }
     } else {
@@ -331,14 +359,14 @@ async function seedInitialPotholes() {
 async function fillMissingLocationMetadata() {
   if (!isPgConnected()) return 0;
   const rows = (await query(
-    `SELECT id, lat, lon, location_name FROM potholes
-     WHERE segment_id IS NULL OR location_name IS NULL`
+    `SELECT id, lat, lon, location_name, segment_id, needs_review FROM potholes
+     WHERE segment_id IS NULL OR NULLIF(BTRIM(location_name), '') IS NULL`
   )).rows;
 
   let touched = 0;
   for (const row of rows) {
     const location = await resolveLocationMetadata(row.lat, row.lon);
-    let name = row.location_name || location.segmentName;
+    let name = row.location_name?.trim() || location.segmentName;
     if (!name) {
       try {
         name = await reverseGeocode(row.lat, row.lon, null);
@@ -346,13 +374,19 @@ async function fillMissingLocationMetadata() {
         console.warn(`[Geocoding] Pothole ${row.id}: ${error.message}`);
       }
     }
+    const segmentId = location.segmentId ?? row.segment_id;
+    const needsReview = segmentId == null;
+    if (segmentId === row.segment_id && needsReview === row.needs_review
+        && (name || null) === row.location_name) continue;
     await query(
-      'UPDATE potholes SET segment_id = $1, needs_review = $2, location_name = $3 WHERE id = $4',
-      [location.segmentId, location.needsReview, name || null, row.id]
+      `UPDATE potholes SET segment_id = $1, needs_review = $2, location_name = $3,
+       updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+      [segmentId, needsReview, name || null, row.id]
     );
     touched++;
   }
   if (touched) invalidateRoadHeatCache();
+  console.log(`[Geocoding] Location backfill: ${rows.length} checked, ${touched} updated.`);
   return touched;
 }
 
