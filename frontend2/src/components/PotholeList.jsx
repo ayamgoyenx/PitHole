@@ -66,7 +66,7 @@ export default function PotholeList({
                 </div>
                 <div className="pothole-item-coords">
                   <MapPin size={14} color="#64748B" />
-                  <span>{item.location_name || 'Lokasi tidak diketahui'}</span>
+                  <span>{item.location_name || item.street_name || 'Nama lokasi belum tersedia'}</span>
                 </div>
               </div>
               <span className={`status-pill status-${item.status}`}>

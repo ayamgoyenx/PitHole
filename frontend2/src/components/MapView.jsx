@@ -230,7 +230,7 @@ export default function MapView({
               <span className="selection-title">Pothole #{selectedPothole.id}</span>
               <span className="selection-coords">
                 <MapPin size={13} aria-hidden="true" />
-                {selectedPothole.location_name || 'Lokasi tidak diketahui'}
+                {selectedPothole.location_name || selectedPothole.street_name || 'Nama lokasi belum tersedia'}
               </span>
             </div>
           </div>
