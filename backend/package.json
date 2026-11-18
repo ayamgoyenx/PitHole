@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "migrate": "node scripts/runMigrations.js",
     "import-roads": "node scripts/importRoads.js",
     "backfill-location-names": "node scripts/backfillLocationNames.js",

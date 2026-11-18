@@ -46,6 +46,30 @@ test('HTTP boundaries protect device uploads, origins, IDs and internal errors',
       assert.equal((await fetch(base + '/api/v1/potholes/seed', { method: 'POST' })).status, 404);
       assert.equal((await fetch(base + '/api/v1/potholes/12junk')).status, 400);
     });
+    await t.test('legacy Railway origin supports credentialed PATCH preflight without widening the new allowlist', async () => {
+      const current = process.env.FRONTEND_ORIGINS;
+      const legacy = process.env.FRONTEND_URL;
+      try {
+        process.env.FRONTEND_URL = 'https://legacy.example, https://second.example';
+        delete process.env.FRONTEND_ORIGINS;
+        const r = await fetch(base + '/api/v1/potholes/7/status', { method: 'OPTIONS', headers: {
+          Origin: 'https://legacy.example', 'Access-Control-Request-Method': 'PATCH',
+          'Access-Control-Request-Headers': 'content-type',
+        } });
+        assert.equal(r.status, 204);
+        assert.equal(r.headers.get('access-control-allow-origin'), 'https://legacy.example');
+        assert.equal(r.headers.get('access-control-allow-credentials'), 'true');
+        assert.match(r.headers.get('access-control-allow-methods'), /PATCH/);
+        process.env.FRONTEND_ORIGINS = current;
+        assert.equal((await fetch(base + '/', { headers: { Origin: 'https://legacy.example' } })).status, 403);
+        process.env.FRONTEND_ORIGINS = '';
+        assert.equal((await fetch(base + '/', { headers: { Origin: 'https://legacy.example' } })).status, 403);
+      } finally {
+        process.env.FRONTEND_ORIGINS = current;
+        if (legacy === undefined) delete process.env.FRONTEND_URL;
+        else process.env.FRONTEND_URL = legacy;
+      }
+    });
     await t.test('raw database errors are not exposed', async () => {
       service.getAllPotholes = async () => { throw new Error('private table and credential detail'); };
       const r = await fetch(base + '/api/v1/potholes'); assert.equal(r.status, 500);
