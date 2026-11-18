@@ -2,7 +2,9 @@ const crypto = require('node:crypto');
 
 function fail(res, code, message) { return res.status(code).json({ status: 'error', message }); }
 function allowedOrigins() {
-  const configured = (process.env.FRONTEND_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
+  // Keep existing Railway FRONTEND_URL settings working; the new name wins
+  // when explicitly set, so stale legacy origins cannot expand the allowlist.
+  const configured = (process.env.FRONTEND_ORIGINS ?? process.env.FRONTEND_URL ?? '').split(',').map(v => v.trim()).filter(Boolean);
   return new Set([...configured, ...(process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173', 'http://127.0.0.1:5173'])]);
 }
 function checkOrigin(req, res, next) {
