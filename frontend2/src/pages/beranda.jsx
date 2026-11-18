@@ -1,3 +1,4 @@
+import { useI18n } from '../locale';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
@@ -7,10 +8,10 @@ import sepeda from '../assets/sepeda.svg';
 import background from '../assets/background.svg';
 import logo from '../assets/logo.svg';
 // import './tentang-kami.css';
-import './beranda.css';
 
 
 export default function Beranda() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
   
@@ -35,24 +36,19 @@ export default function Beranda() {
             transition={{ duration: 0.65, ease: "easeOut" }}
             className="about-copy-inner"
           >
-            <h1 id="about-heading" className="about-heading">
-              Bersepeda
-              <br />
-              dengan Aman Bersama
-            </h1>
+            <h1 id="about-heading" className="about-heading">{t("Bersepeda")}<br />{t("dengan Aman Bersama")}</h1>
 
             <img className="about-logo" src={logo} alt="PitHole" />
 
             <p className="about-description">
-              Temukan informasi jalan berlubang dan rute yang lebih aman
-              untuk setiap perjalanan bersepeda Anda.
+              {t('Temukan informasi jalan berlubang untuk membantu merencanakan perjalanan bersepeda Anda.','Explore reported potholes to help plan your cycling journeys.')}
             </p>
           </motion.div>
         </div>
 
         <motion.img
           src={sepeda}
-          alt="Ilustrasi pesepeda menggunakan helm"
+          alt={t("Ilustrasi pesepeda menggunakan helm")}
           initial={reduceMotion ? false : { opacity: 0, x: -35 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.9, delay: 0.2, ease: "easeOut" }}
@@ -61,7 +57,7 @@ export default function Beranda() {
 
         <button
           type="button"
-          aria-label="Buka peta jalan berlubang"
+          aria-label={t("Buka peta jalan berlubang")}
           className="about-scroll-button"
           onClick={() => navigate('/petajalanberlubang')}
         >

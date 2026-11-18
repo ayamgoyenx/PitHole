@@ -17,13 +17,13 @@ function emptyFeatureCollection(available = false) {
 }
 
 const round1 = (value) => Math.round(value * 10) / 10;
-async function findNearestRoadSegment(lat, lon) {
+async function findNearestRoadSegment(lat, lon, runQuery = query) {
   if (!isPgConnected() || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
     return null;
   }
 
   const point = 'ST_SetSRID(ST_MakePoint($2, $1), 4326)';
-  const result = await query(
+  const result = await runQuery(
     `SELECT id, name
      FROM road_segments
      WHERE ST_DWithin(geom::geography, ${point}::geography, $3)

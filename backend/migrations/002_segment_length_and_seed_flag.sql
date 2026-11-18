@@ -4,7 +4,7 @@ DO $$
 BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'road_segments' AND column_name = 'segment_no'
+    WHERE table_schema = current_schema() AND table_name = 'road_segments' AND column_name = 'segment_no'
   ) THEN
     ALTER TABLE road_segments RENAME COLUMN segment_no TO part_index;
   END IF;

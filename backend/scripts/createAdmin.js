@@ -4,8 +4,8 @@ const { initDb, isPgConnected, pool } = require('../src/db');
 // Usage: npm run create-admin -- <username> <password>
 async function main() {
   const [username, password] = process.argv.slice(2);
-  if (!username || !password || password.length < 12) {
-    throw new Error('Usage: npm run create-admin -- <username> <password (min 12 chars)>');
+  if (!username || username.length > 100 || !password || password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) {
+    throw new Error('Usage: npm run create-admin -- <username (max 100 chars)> <password (min 12 chars, max 72 UTF-8 bytes)>');
   }
   await initDb();
   if (!isPgConnected()) throw new Error('PostgreSQL is unavailable.');

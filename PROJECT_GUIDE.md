@@ -1,5 +1,7 @@
 # PitHole Project Guide
 
+Updated 18 November 2026 after approved cleanup. Active app: `frontend2`. See `BACKEND_HANDOFF.md` for current database migrations, persistent admin sessions, device authentication, and pin recovery; older design discussion below is background.
+
 ## 1. Project Purpose
 
 PitHole is a road-pothole reporting and mapping project. Its intended system combines edge-device sensing, a backend API, a database, and web interfaces so reports can be collected and their repair progress can be viewed.
@@ -9,15 +11,9 @@ The repository contains working prototypes at different maturity levels. The bro
 ## 2. High-Level Architecture
 
 ```text
-Current browser apps
-  frontend/ (legacy UI)       frontend2/ (newer routed UI)
-            \                  /
-             \ -- HTTP /api --/
-                       |
-                Express backend
-                       |
-        PostgreSQL if configured, otherwise
-          temporary in-memory fallback
+Current browser app
+frontend2 --> Express API --> PostgreSQL + PostGIS
+(Database required before API startup)
 
 Current checked-in sensor path
 MPU6050 -- I2C --> STM32F401 -- USART2 --> laptop Python logger
@@ -42,7 +38,6 @@ The web frontends read and display records from the backend. The backend accepts
 | Interactive maps | Leaflet, `react-leaflet`, OpenStreetMap tiles | Displays pothole coordinates and status-colored markers. |
 | Icons and animation | `lucide-react`, `framer-motion` | UI icons and Beranda page transitions. |
 | Frontend checks | Oxlint, Vite build | Static lint checks and production bundling. |
-| Legacy frontend | Separate React/Vite app in `frontend/` | Earlier map-oriented UI; root development scripts still start this app. |
 | MCU firmware | C, STM32Cube HAL, STM32CubeIDE project | Reads MPU6050 values over I2C1 and sends CSV-like values over USART2. |
 | Laptop sensor monitor | Python, PySerial, pandas, Matplotlib, PyQt5 | Reads STM32 serial data, writes CSV, displays charts, and exports a summary plot. |
 
@@ -52,9 +47,8 @@ Versions are declared in each app's `package.json`. The repository does not decl
 
 ```text
 PitHole/
-|-- package.json                     # Root scripts; currently starts backend + legacy frontend
+|-- package.json                     # Root scripts; starts backend + frontend2
 |-- package-lock.json
-|-- IMPLEMENTATION_CHANGES.md         # Earlier per-file implementation handoff
 |-- PROJECT_GUIDE.md                 # This architecture, code, and database guide
 |-- README_IMU.md                    # STM32/MPU6050 wiring, UART format, and Python logger guide
 |-- backend/
@@ -68,15 +62,6 @@ PitHole/
 |       `-- utils/
 |           |-- adminAuth.js         # Admin credentials, signed sessions, middleware
 |           `-- haversine.js         # Distance between latitude/longitude pairs
-|-- frontend/                        # Older/legacy React application; do not confuse with frontend2
-|   |-- package.json
-|   |-- vite.config.js
-|   `-- src/
-|       |-- main.jsx                # Legacy React mount
-|       |-- App.jsx                 # Legacy map/detail app orchestration
-|       |-- App.css / index.css      # Legacy app styles
-|       |-- assets/                 # Legacy image assets
-|       `-- components/             # Navbar, map, list, details, footer, IoT modal
 |-- frontend2/                       # Newer React application
 |   |-- package.json
 |   |-- vite.config.js              # Vite dev server and /api proxy to port 5000
@@ -252,7 +237,7 @@ The larger system description also mentions ESP32-S3/OV5640/FOMO camera inferenc
 
 ## 10. Running the Project Locally
 
-The repository has two separate frontends. The root `npm run dev` script launches the backend and the old `frontend/`, **not** `frontend2/`.
+The active application is `frontend2/`. Root `npm run dev` starts backend and frontend2. The legacy frontend and its separate script have been removed with approval.
 
 Typical PowerShell workflow, using separate terminals:
 
@@ -270,9 +255,9 @@ npm install
 npm run dev
 ```
 
-The Vite development server prints its local URL. The Vite proxy sends `/api` requests to `http://localhost:5000`. To run the legacy application, use `npm run dev` from the repository root instead.
+The Vite development server prints its local URL. The Vite proxy sends `/api` requests to `http://localhost:5000`. Use root `npm run dev` to run both active services.
 
-The root `postinstall` script currently installs dependencies for `backend` and `frontend`, but not `frontend2`; install `frontend2` dependencies separately if needed.
+Root `npm run setup` installs backend and frontend2 dependencies. Configure a development database and apply migrations before startup; see BACKEND_HANDOFF.md.
 
 Admin environment variables (documented in `backend/.env.example`):
 

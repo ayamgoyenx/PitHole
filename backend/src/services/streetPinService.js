@@ -1,4 +1,4 @@
-const { query, isPgConnected } = require('../db');
+const { query, withTransaction, isPgConnected } = require('../db');
 const { STREET_PIN_CONFIG } = require('../config/streetPin');
 const { classifyLocation } = require('../utils/classifyLocation');
 const { findNearestRoadSegment, ROAD_SNAP_RADIUS_METERS } = require('./roadService');
@@ -131,49 +131,62 @@ function toStatsRows(rows) {
 // Recount ONE road and upsert/delete its location_stats row.
 async function recomputeLocation(locationKey) {
   if (!isPgConnected() || locationKey == null) return null;
-
-  const result = await query(roadAggregateSql(true), [locationKey]);
-  const stats = toStatsRows(result.rows);
-  await query('DELETE FROM location_stats WHERE location_key = $1', [locationKey]);
-  if (stats.length) await query(INSERT_STATS_SQL, [JSON.stringify(stats)]);
-  return stats[0]?.level ?? null;
+  return withTransaction(async tx => {
+    await tx('SELECT pg_advisory_xact_lock(73190422)');
+    const result = await tx(roadAggregateSql(true), [locationKey]);
+    const stats = toStatsRows(result.rows);
+    await tx('DELETE FROM location_stats WHERE location_key = $1', [locationKey]);
+    if (stats.length) await tx(INSERT_STATS_SQL, [JSON.stringify(stats)]);
+    return stats[0]?.level ?? null;
+  });
 }
 
-async function recomputeLocations(keys) {
-  for (const key of new Set(keys.filter((value) => value != null))) {
-    await recomputeLocation(key);
+// Source-table triggers persist the job in the same transaction as the report.
+// A failed rebuild cannot erase the previous cache or lose the retry request.
+async function syncPothole() {
+  return recoverPending();
+}
+async function recoverPending() {
+  try { return await rebuildAll({ onlyPending: true }); }
+  catch (error) {
+    console.warn(`[Street pin] Recovery deferred: ${error.message}`);
+    return { pending: true };
   }
 }
-
-// Called after a pothole is created, re-detected or its status changes. Never throws.
-async function syncPothole(potholeId, lat, lon, known = null) {
-  if (!isPgConnected()) return;
-  try {
-    if (known || !(await hasLocationRow(potholeId))) {
-      const current = await upsertPotholeLocation(potholeId, lat, lon, known);
-      await recomputeLocations([current.locationKey, current.previousKey]);
-    } else {
-      const row = await query('SELECT location_key FROM pothole_location WHERE pothole_id = $1', [potholeId]);
-      await recomputeLocation(row.rows[0].location_key);
-    }
-  } catch (error) {
-    console.warn(`[Street pin] Sync failed for pothole ${potholeId}: ${error.message}`);
-  }
+function startRecoveryWorker() {
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try { await recoverPending(); } finally { running = false; }
+  };
+  const initial = setTimeout(tick, 0);
+  const timer = setInterval(tick, 30000);
+  timer.unref(); initial.unref();
+  return () => { clearTimeout(initial); clearInterval(timer); };
 }
-
-async function hasLocationRow(potholeId) {
-  const result = await query('SELECT 1 FROM pothole_location WHERE pothole_id = $1', [potholeId]);
-  return result.rowCount > 0;
+async function rebuildAll({ geocode = false, onlyPending = false } = {}) {
+  if (!isPgConnected()) throw new Error('Database unavailable for pin recovery.');
+  return withTransaction(async tx => {
+    await tx('SELECT pg_advisory_xact_lock(73190422)');
+    const job = await tx('SELECT id FROM street_pin_jobs WHERE id = 1 FOR UPDATE');
+    if (onlyPending && !job.rowCount) return { pending: false };
+    // Ensure explicit maintenance also blocks concurrent source-trigger updates.
+    if (!job.rowCount) await tx('INSERT INTO street_pin_jobs(id) VALUES(1) ON CONFLICT DO NOTHING');
+    const result = await rebuildAllRows({ geocode }, tx);
+    await tx('DELETE FROM street_pin_jobs WHERE id = 1');
+    return { ...result, pending: false };
+  });
 }
 
 /**
  * Full backfill: re-snaps every pothole, then rebuilds location_stats from scratch.
  * `geocode` additionally calls Nominatim (1 req/s) for potholes that still have no name.
  */
-async function rebuildAll({ geocode = false } = {}) {
+async function rebuildAllRows({ geocode = false }, runQuery) {
   if (!isPgConnected()) return { potholes: 0, pins: 0 };
 
-  await query(
+  await runQuery(
     `INSERT INTO pothole_location (pothole_id, lat, lon, id_location, location_name)
      SELECT p.id, p.lat, p.lon, nearest.id, COALESCE(nearest.name, p.location_name)
      FROM potholes p
@@ -192,23 +205,23 @@ async function rebuildAll({ geocode = false } = {}) {
   );
 
   if (geocode) {
-    const unnamed = await query('SELECT pothole_id, lat, lon FROM pothole_location WHERE location_name IS NULL');
+    const unnamed = await runQuery('SELECT pothole_id, lat, lon FROM pothole_location WHERE location_name IS NULL');
     for (const row of unnamed.rows) {
       try {
         const name = await reverseGeocode(row.lat, row.lon, null);
-        if (name) await query('UPDATE pothole_location SET location_name = $1 WHERE pothole_id = $2', [name, row.pothole_id]);
+        if (name) await runQuery('UPDATE pothole_location SET location_name = $1 WHERE pothole_id = $2', [name, row.pothole_id]);
       } catch (error) {
         console.warn(`[Street pin] Geocoding pothole ${row.pothole_id} failed: ${error.message}`);
       }
     }
   }
 
-  const aggregated = await query(roadAggregateSql(false));
+  const aggregated = await runQuery(roadAggregateSql(false));
   const rows = toStatsRows(aggregated.rows);
 
-  await query('DELETE FROM location_stats');
-  if (rows.length) await query(INSERT_STATS_SQL, [JSON.stringify(rows)]);
-  const total = await query('SELECT COUNT(*)::integer AS n FROM pothole_location');
+  await runQuery('DELETE FROM location_stats');
+  if (rows.length) await runQuery(INSERT_STATS_SQL, [JSON.stringify(rows)]);
+  const total = await runQuery('SELECT COUNT(*)::integer AS n FROM pothole_location');
   return { potholes: total.rows[0].n, pins: rows.length };
 }
 
@@ -258,4 +271,6 @@ module.exports = {
   syncPothole,
   rebuildAll,
   getStreetPins,
+  recoverPending,
+  startRecoveryWorker,
 };

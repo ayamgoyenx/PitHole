@@ -1,64 +1,28 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Logo from '../assets/logo.svg';
 import { CircleUserRound, Menu, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useI18n } from '../locale';
+import { LanguageSwitch } from '../i18n';
 
-export default function Navbar({ onResetToHome, isAdmin }) {
+export default function Navbar() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const navigateTo = (path) => {
-    navigate(path);
-    setMenuOpen(false);
-  };
-  
-  return (
-    <header className="navbar">
-      <div className="navbar-inner">
-        <div className="navbar-left">
-          <button className="brand-section" onClick={() => navigateTo('/tentang-kami')} aria-label="PitHole home">
-              <div className="brand-logo">
-                <img 
-                  src= {Logo}
-                  alt="pithole logo" 
-                  style = {{width:"auto", height:"36px"}}
-                />
-              </div>
-            </button>
-        </div>
-        <button
-          className="navbar-toggle"
-          type="button"
-          aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((isOpen) => !isOpen)}
-        >
-          {menuOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-        <div className={`navbar-menu${menuOpen ? ' is-open' : ''}`}>
-          <nav className="navbar-middle" aria-label="Main navigation">
-            <button className="menu" onClick={() => navigateTo('/beranda')}>
-              Beranda
-            </button>
-            <button className="menu" onClick={() => navigateTo('/petajalanberlubang')}>
-              Peta Jalan Berlubang
-            </button>
-          </nav>
-          <div className="navbar-right">
-            <button className="menu" onClick={onResetToHome}>EN</button>
-            <button className="menu" onClick={onResetToHome}>ID</button>
-            {isAdmin ? (
-                <>
-                  <button className="menu" onClick={() => navigateTo('/admin-dashboard')}>Dashboard</button>
-                  <button className="menu" onClick={() => navigateTo('/admin-pitholelist')}>Pothole List</button>
-                </>
-              ) : (
-                <button className="menu" aria-label="Admin login" onClick={() => navigateTo('/admin')}> <CircleUserRound size={20} /> </button>
-              )}
-
-          </div>
-        </div>
-      </div>
-    </header>
-  );
+  return <header className="navbar"><div className="navbar-inner">
+    <button className="brand-section" onClick={() => { navigate('/beranda'); setMenuOpen(false); }} aria-label={t('Beranda PitHole')}>
+      <img src={Logo} alt="PitHole" style={{ height: 36, width: 'auto' }} />
+    </button>
+    <button className="navbar-toggle" type="button" aria-label={t(menuOpen ? 'Tutup menu' : 'Buka menu')}
+      aria-expanded={menuOpen} aria-controls="public-navigation" onClick={() => setMenuOpen(value => !value)}>
+      {menuOpen ? <X size={20} /> : <Menu size={20} />}
+    </button>
+    <div id="public-navigation" className={`navbar-menu${menuOpen ? ' is-open' : ''}`}>
+      <nav className="navbar-middle" aria-label={t('Navigasi utama')}>
+        <NavLink className="menu" to="/beranda" onClick={() => setMenuOpen(false)}>{t('Beranda')}</NavLink>
+        <NavLink className="menu" to="/petajalanberlubang" onClick={() => setMenuOpen(false)}>{t('Peta Jalan Berlubang')}</NavLink>
+      </nav>
+      <div className="navbar-right"><LanguageSwitch /><NavLink className="menu" to="/admin" aria-label={t('Masuk admin')}><CircleUserRound size={22} /></NavLink></div>
+    </div>
+  </div></header>;
 }
