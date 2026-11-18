@@ -1,8 +1,10 @@
+import { useI18n } from '../../locale';
+import { LanguageSwitch } from '../../i18n';
+import { apiUrl, readJson } from '../../api';
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, LogOut, MapPinned, Menu, X } from 'lucide-react';
 import logo from '../../assets/logo.svg';
-import './admin.css';
 
 const navigation = [
   { to: '/admin-dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -10,7 +12,9 @@ const navigation = [
 ];
 
 export default function AdminLayout({ activePath, eyebrow, children }) {
+  const { t } = useI18n();
   const navigate = useNavigate();
+  const [logoutError, setLogoutError] = useState('');
   const [sessionState, setSessionState] = useState('checking');
   const [username, setUsername] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -18,7 +22,7 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
   useEffect(() => {
     let active = true;
     const verifySession = () => {
-      fetch('/api/v1/admin/session', { credentials: 'include', cache: 'no-store' })
+      fetch(apiUrl('/api/v1/admin/session'), { credentials: 'include', cache: 'no-store' })
         .then(async (response) => {
           if (!active) return;
           if (response.ok) {
@@ -53,14 +57,16 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
   }, [navigate]);
 
   const handleLogout = async () => {
-    await fetch('/api/v1/admin/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-    navigate('/admin-login', { replace: true });
+    try {
+      await readJson(await fetch(apiUrl('/api/v1/admin/logout'), { method: 'POST', credentials: 'include' }));
+      navigate('/admin-login', { replace: true });
+    } catch { setLogoutError('Keluar gagal. Periksa koneksi dan coba lagi.'); }
   };
 
   if (sessionState !== 'authenticated') {
     return (
       <div className="admin-app admin-auth-check" role="status">
-        {sessionState === 'checking' ? 'Memeriksa sesi admin…' : sessionState}
+        {t(sessionState === 'checking' ? 'Memeriksa sesi admin…' : sessionState)}
       </div>
     );
   }
@@ -71,7 +77,7 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
       <div className="admin-user-info">
         <div className="admin-user-name" title={username}>{username || 'PitHole Admin'}</div>
       </div>
-      <button className="admin-logout" type="button" onClick={handleLogout} aria-label="Keluar admin" title="Keluar admin">
+      <button className="admin-logout" type="button" onClick={handleLogout} aria-label={t("Keluar admin")} title={t("Keluar admin")}>
         <LogOut size={16} />
       </button>
     </div>
@@ -86,19 +92,19 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
       onClick={() => setMenuOpen(false)}
     >
       <Icon size={16} />
-      {label}
+      {t(label)}
     </NavLink>
   ));
 
   return (
     <div className="admin-app admin-shell">
       <header className="admin-mobile-nav">
-        <div className="admin-mobile-nav-bar">
-          <img src={logo}           alt="Administrasi PitHole" />
+        <div className="admin-mobile-nav-bar"><LanguageSwitch />
+          <img src={logo}           alt={t("Administrasi PitHole")} />
           <button
             className="admin-mobile-toggle"
             type="button"
-            aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'}
+            aria-label={t(menuOpen ? 'Tutup menu' : 'Buka menu')}
             aria-expanded={menuOpen}
             aria-controls="admin-mobile-menu"
             onClick={() => setMenuOpen((open) => !open)}
@@ -108,7 +114,7 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
         </div>
         {menuOpen && (
           <div className="admin-mobile-menu" id="admin-mobile-menu">
-            <nav className="admin-mobile-links" aria-label="Navigasi admin">{navLinks}</nav>
+            <nav className="admin-mobile-links" aria-label={t("Navigasi admin")}>{navLinks}</nav>
             {userBlock}
           </div>
         )}
@@ -116,22 +122,22 @@ export default function AdminLayout({ activePath, eyebrow, children }) {
 
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <img src={logo} alt="PitHole administration" />
+          <img src={logo} alt={t("PitHole administration")} />
         </div>
-        <div className="admin-sidebar-label">        Operasional</div>
-                <nav className="admin-nav" aria-label="Navigasi admin">{navLinks}</nav>
-        <div className="admin-sidebar-bottom">{userBlock}</div>
+        <div className="admin-sidebar-label">{t("Operasional")}</div>
+                <nav className="admin-nav" aria-label={t("Navigasi admin")}>{navLinks}</nav>
+        <div className="admin-sidebar-bottom"><LanguageSwitch />{userBlock}</div>
       </aside>
 
       <div className="admin-workspace">
         <header className="admin-topbar">
-          <div className="admin-breadcrumb">PitHole / Administrasi / {eyebrow}</div>
+          <div className="admin-breadcrumb">PitHole / {t('Administrasi')} / {t(eyebrow)}</div>
           <div className="admin-topbar-actions">
             <span className="admin-live-dot" />
-            Data langsung
+            {t('Administrasi')}
           </div>
         </header>
-        {children}
+        {logoutError && <p role="alert" className="admin-notice">{t(logoutError)}</p>}{children}
       </div>
     </div>
   );

@@ -20,3 +20,10 @@ backend/.env
 frontend/.env
 
 *.log
+
+# Local previews, database clusters and generated review artifacts
+/tmp/
+/output/
+frontend2/dist/
+.env.*
+!.env.example

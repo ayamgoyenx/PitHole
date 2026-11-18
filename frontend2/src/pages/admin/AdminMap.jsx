@@ -1,3 +1,6 @@
+import DeviceLocation from '../../components/DeviceLocation';
+import { useI18n } from '../../locale';
+import { hasCoordinates } from '../../utils/display';
 import React, { useEffect } from 'react';
 import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -20,12 +23,13 @@ function FocusSelected({ pothole }) {
   const lat = pothole ? Number(pothole.lat) : null;
   const lon = pothole ? Number(pothole.lon) : null;
   useEffect(() => {
-    if (id != null) map.panTo([lat, lon]);
+    if (id != null && hasCoordinates({ lat, lon })) map.panTo([lat, lon]);
   }, [id, lat, lon, map]);
   return null;
 }
 
 export default function AdminMap({ potholes = [], className = '', selectedId = null, onSelect }) {
+  const { t } = useI18n();
   const selected = potholes.find((item) => item.id === selectedId) || null;
   return (
     <div className={`admin-map ${className}`}>
@@ -35,15 +39,16 @@ export default function AdminMap({ potholes = [], className = '', selectedId = n
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FocusSelected pothole={selected} />
-        {potholes.map((pothole) => (
+        {potholes.filter(hasCoordinates).map((pothole) => (
           <Marker
             key={`${pothole.id}-${pothole.status}-${pothole.id === selectedId}`}
             position={[Number(pothole.lat), Number(pothole.lon)]}
             icon={createIcon(pothole.status, pothole.id === selectedId)}
-            title={`Lubang #${pothole.id}`}
+            title={`${t('Lubang')} #${pothole.id}`}
             eventHandlers={onSelect ? { click: () => onSelect(pothole.id) } : undefined}
           />
         ))}
+      <DeviceLocation />
       </MapContainer>
     </div>
   );

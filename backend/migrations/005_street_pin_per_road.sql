@@ -16,7 +16,7 @@ DO $$
 BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'location_stats' AND column_name = 'location_key'
+    WHERE table_schema = current_schema() AND table_name = 'location_stats' AND column_name = 'location_key'
   ) THEN
     DROP TABLE location_stats;
     CREATE TABLE location_stats (

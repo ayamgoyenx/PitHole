@@ -1,24 +1,8 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Konfigurasi pool PostgreSQL dari variabel lingkungan
-// DATABASE_URL (e.g. Supabase) takes priority over the separate DB_* variables
-const pool = new Pool(
-  process.env.DB_URL
-    ? {
-      connectionString: process.env.DB_URL,
-      ssl: { rejectUnauthorized: false },
-      connectionTimeoutMillis: 10000,
-    }
-    : {
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'pithole_db',
-      connectionTimeoutMillis: 5000,
-    }
-);
+const { databaseConfig } = require('./config/database');
+const pool = new Pool(databaseConfig());
 
 let isPgConnected = false;
 // Storage fallback jika database PostgreSQL belum berjalan di sistem pengguna
@@ -31,9 +15,10 @@ const memoryDb = {
  * Inisialisasi tabel PostgreSQL
  */
 async function initDb() {
+  let client;
+  isPgConnected = false;
   try {
-    const client = await pool.connect();
-    isPgConnected = true;
+    client = await pool.connect();
     console.log(`[Database] Terhubung ke PostgreSQL: ${process.env.DB_NAME || 'pithole_db'} di ${process.env.DB_HOST || 'localhost'}`);
 
     // Buat tabel potholes jika belum ada
@@ -54,6 +39,10 @@ async function initDb() {
 
     await client.query(createTableQuery);
     await client.query('ALTER TABLE potholes ADD COLUMN IF NOT EXISTS repaired_at TIMESTAMPTZ');
+    await client.query(`CREATE TABLE IF NOT EXISTS device_sync_state (
+      device_id VARCHAR(80) PRIMARY KEY,
+      last_success_at TIMESTAMPTZ NOT NULL
+    )`);
     await client.query(`
       CREATE TABLE IF NOT EXISTS pothole_events (
         event_id   VARCHAR(80) PRIMARY KEY,
@@ -62,15 +51,17 @@ async function initDb() {
       );
     `);
     console.log('[Database] Tabel "potholes" dan "pothole_events" di PostgreSQL siap digunakan.');
-    client.release();
+    isPgConnected = true;
   } catch (err) {
     isPgConnected = false;
-    console.warn(
-      `[Database Warning] Tidak dapat terhubung ke PostgreSQL (${err.message}). ` +
-      `Sistem akan beralih ke memori sementara (In-Memory Fallback) agar server Express & frontend tetap berjalan lancar.`
-    );
+    throw err;
+  } finally {
+    client?.release();
   }
 }
+
+// Avoid an unhandled pool error terminating the process. Queries still report failures.
+pool.on?.('error', error => console.error('[Database] Idle connection failed:', error.message));
 
 /**
  * Wrapper query database
@@ -79,12 +70,29 @@ async function query(text, params) {
   if (isPgConnected) {
     return pool.query(text, params);
   }
-  return null;
+  throw Object.assign(new Error('Database belum siap.'), { statusCode: 503 });
+}
+
+// Every statement in a transaction must use the same checked-out connection.
+async function withTransaction(work) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    const result = await work(client.query.bind(client));
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* Preserve the original error. */ }
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = {
   pool,
   query,
+  withTransaction,
   initDb,
   isPgConnected: () => isPgConnected,
   memoryDb,

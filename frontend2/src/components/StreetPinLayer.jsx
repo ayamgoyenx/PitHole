@@ -1,3 +1,5 @@
+import { useI18n } from '../locale';
+import { apiUrl } from '../api';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Marker, Pane, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -21,6 +23,7 @@ function formatNumber(value, digits) {
 }
 
 export default function StreetPinLayer({ enabled, refreshKey, onStatusChange }) {
+  const { t } = useI18n();
   const map = useMap();
   const [pins, setPins] = useState([]);
   const controllerRef = useRef(null);
@@ -48,7 +51,7 @@ export default function StreetPinLayer({ enabled, refreshKey, onStatusChange }) 
       const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
       if (firstLoad) statusRef.current({ state: 'loading', config: null });
 
-      fetch(`/api/v1/street-pins?bbox=${encodeURIComponent(bbox)}`, { signal: controller.signal })
+      fetch(apiUrl(`/api/v1/street-pins?bbox=${encodeURIComponent(bbox)}`), { signal: controller.signal })
         .then(async (response) => {
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.message || 'Gagal memuat pin jalan.');
@@ -62,6 +65,7 @@ export default function StreetPinLayer({ enabled, refreshKey, onStatusChange }) 
         })
         .catch((error) => {
           if (error.name === 'AbortError' || controller.signal.aborted) return;
+          setPins([]);
           statusRef.current({ state: 'error', config: null });
         });
     };
@@ -101,11 +105,11 @@ export default function StreetPinLayer({ enabled, refreshKey, onStatusChange }) 
         >
           <Popup>
             <div className="street-pin-popup">
-              <strong>{pin.location_name || 'Lokasi tidak diketahui'}</strong>
-              <span className={`street-pin-level ${pin.level}`}>{LEVEL_LABELS[pin.level] || pin.level}</span>
-              <div>{pin.hole_count} lubang aktif</div>
-              <div>Panjang ruas: {formatNumber(pin.length_m, 0)} m</div>
-              <div>Kepadatan: {formatNumber(pin.density_per_100m, 2)} lubang / 100 m</div>
+              <strong>{pin.location_name || t('Lokasi tidak diketahui')}</strong>
+              <span className={`street-pin-level ${pin.level}`}>{t(LEVEL_LABELS[pin.level] || pin.level)}</span>
+              <div>{pin.hole_count} {t('lubang belum selesai')}</div>
+              <div>{t('Panjang ruas')}: {formatNumber(pin.length_m, 0)} m</div>
+              <div>{t('Kepadatan')}: {formatNumber(pin.density_per_100m, 2)} {t('lubang / 100 m')}</div>
             </div>
           </Popup>
         </Marker>
