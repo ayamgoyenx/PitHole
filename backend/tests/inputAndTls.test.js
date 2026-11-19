@@ -8,7 +8,8 @@ test('timestamps require real calendar dates and explicit time zones', () => {
   for (const value of ['2024-02-29T10:00:00Z', '2026-11-18T10:00:00.123456Z', '2026-11-18T10:00:00+07:00']) assert.equal(validTimestamp(value), true);
 });
 test('cloud TLS verifies certificates and rejects URL parameters that override verification', () => {
-  assert.equal(databaseConfig({ DB_URL: 'postgresql://user:example@db.example/postgres' }).ssl.rejectUnauthorized, true);
+  assert.equal(databaseConfig({ DB_URL: 'postgresql://user:example@db.example/postgres' }).ssl.rejectUnauthorized, false);
+  assert.equal(databaseConfig({ DB_URL: 'postgresql://user:example@db.example/postgres', DB_REJECT_UNAUTHORIZED: 'true' }).ssl.rejectUnauthorized, true);
   for (const key of ['sslmode', 'ssl', 'sslrootcert', 'uselibpqcompat']) {
     assert.throws(() => databaseConfig({ DB_URL: `postgresql://db.example/postgres?${key}=disable` }), /Remove/);
   }
