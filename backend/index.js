@@ -16,8 +16,8 @@ const PORT = process.env.PORT || 5000;
 app.disable('x-powered-by');
 // Set only when the deployment's trusted proxy topology is known.
 if (process.env.TRUST_PROXY_HOPS) app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS));
-app.use(safety.checkOrigin);
 app.use(cors({ origin: (origin, done) => done(null, !origin || safety.allowedOrigins().has(origin)), credentials: true }));
+app.use(safety.checkOrigin);
 app.use(express.json({ limit: '256kb' }));
 app.use('/api/v1/admin', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
