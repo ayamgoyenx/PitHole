@@ -1,9 +1,7 @@
 const { STREET_PIN_CONFIG } = require('../config/streetPin');
 
-/**
- * Classify a road location by open potholes per 100 m.
- * Returns { density, level } where level is "severe" | "medium" | "safe" | null (no potholes -> no pin).
- */
+// Classify a road location by open potholes per 100 m.
+// Returns { density, level } where level is "severe" | "medium" | "safe" | null (no potholes -> no pin).
 function classifyLocation(lengthM, holes, config = STREET_PIN_CONFIG) {
   const holeCount = Number(holes);
   if (!Number.isFinite(holeCount) || holeCount <= 0) {

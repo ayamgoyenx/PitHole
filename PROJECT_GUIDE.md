@@ -77,7 +77,7 @@ PitHole/
 |       |   |-- PotholeList.jsx     # Public status filter and report list
 |       |   |-- PotholeDetail.jsx   # Public report detail and mini-map
 |       |   |-- Footer.jsx          # Public footer
-|       |   `-- IoTTestModal.jsx    # Batch upload/seed testing controls
+|       |   `-- IoTTestModal.jsx    # Device batch-upload testing controls
 |       `-- pages/
 |           |-- beranda.jsx / beranda.css
 |           |-- petajalanberlubang.jsx / petajalanberlubang.css
@@ -139,7 +139,6 @@ The API server starts from `backend/index.js`, listens on `PORT` (default `5000`
 | `GET` | `/api/v1/potholes` | Public | Returns `stats` and all pothole records. |
 | `GET` | `/api/v1/potholes/:id` | Public | Returns one pothole by ID. |
 | `PATCH` | `/api/v1/potholes/:id/status` | Admin session required | Changes status to `active`, `in_progress`, or `repaired`. |
-| `POST` | `/api/v1/potholes/seed` | Admin session required | Clears/reseeds the table in PostgreSQL; intended for testing only. |
 
 Admin sessions are HMAC-signed cookies that expire after eight hours. The cookie is `HttpOnly`, `SameSite=Strict`, and `Secure` when `NODE_ENV=production`. Admin credentials are a single environment-configured account, not a multi-user identity system.
 
