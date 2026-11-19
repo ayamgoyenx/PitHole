@@ -228,11 +228,6 @@ app.patch('/api/v1/potholes/:id/status', adminAuth.requireAdmin, safety.validId,
   }
 });
 
-/**
- * 6. Endpoint Seed Data Dummy Area UGM (Untuk Testing)
- * POST /api/v1/potholes/seed
- */
-// Destructive sample-data reset is not exposed through the HTTP API.
 app.get('/api/road-heat', async (req, res, next) => {
   res.setHeader('Cache-Control', 'public, max-age=30');
   try {

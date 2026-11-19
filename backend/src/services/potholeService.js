@@ -24,7 +24,7 @@ async function resolveLocationMetadata(lat, lon, runQuery) {
 }
 
 /**
- * Memproses batch data upload dari ESP32 MicroSD dengan deduplikasi spasial
+ * Processing batch data upload from ESP32 MicroSD with deduplication spatially
  */
 async function processBatchUpload(syncTime, potholes) {
   // Validate the entire batch before writing anything, including the DB key limit.
@@ -70,8 +70,6 @@ async function processBatchUpload(syncTime, potholes) {
         // One lock is intentionally conservative for the current small device fleet.
         await tx('SELECT pg_advisory_xact_lock(73190421)');
         if (eventId) {
-          // The unique key is claimed BEFORE changing a pothole. Concurrent retries
-          // wait for this transaction and only the winner is allowed to mutate data.
           const claim = await tx(
             'INSERT INTO pothole_events (event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING event_id',
             [eventId]
@@ -121,7 +119,7 @@ async function processBatchUpload(syncTime, potholes) {
         return outcome;
       });
 
-      // Network geocoding and derived pins must not hold the event transaction open.
+      
       // A retry after any post-commit failure still finds the committed event.
       if (result.action !== 'duplicate') {
         invalidateRoadHeatCache();
@@ -195,9 +193,7 @@ async function processBatchUpload(syncTime, potholes) {
   return processedResults;
 }
 
-// The short SHARE lock waits for existing writers and prevents new writes until
-// the data and watermark have been read. Migration 006 stamps later writes with
-// wall-clock time, even when their transaction began before this snapshot.
+
 async function getSyncSnapshot(lastSync) {
   if (lastSync != null && !validTimestamp(lastSync)) {
     throw Object.assign(new Error('last_sync tidak valid'), { statusCode: 400 });
@@ -210,9 +206,8 @@ async function getSyncSnapshot(lastSync) {
   });
 }
 
-/**
- * Mendapatkan data titik lubang baru setelah timestamp last_sync
- */
+
+// Mendapatkan data titik lubang baru setelah timestamp last_sync
 async function getSyncData(lastSync) {
   if (lastSync != null && !validTimestamp(lastSync)) {
     throw Object.assign(new Error('last_sync tidak valid'), { statusCode: 400 });
@@ -236,9 +231,7 @@ async function getSyncData(lastSync) {
   }
 }
 
-/**
- * Mendapatkan seluruh daftar potholes untuk frontend React
- */
+// Mendapatkan seluruh daftar potholes untuk frontend React
 const POTHOLE_WITH_STREET_SQL = `SELECT p.*, rs.name AS street_name
   FROM potholes p LEFT JOIN road_segments rs ON rs.id = p.segment_id`;
 
@@ -251,9 +244,7 @@ async function getAllPotholes() {
   }
 }
 
-/**
- * Mendapatkan 1 pothole berdasarkan ID
- */
+// Mendapatkan 1 pothole berdasarkan ID
 async function getPotholeById(id) {
   if (isPgConnected()) {
     const res = await query(`${POTHOLE_WITH_STREET_SQL} WHERE p.id = $1`, [id]);
@@ -263,9 +254,7 @@ async function getPotholeById(id) {
   }
 }
 
-/**
- * Mengubah status pothole oleh Admin
- */
+// Mengubah status pothole oleh Admin
 async function updatePotholeStatus(id, status) {
   const validStatuses = ['active', 'in_progress', 'repaired'];
   if (!validStatuses.includes(status)) {
@@ -307,100 +296,9 @@ async function updatePotholeStatus(id, status) {
   }
 }
 
-/**
- * Seed data awal area UGM
- */
-async function seedInitialPotholes() {
-  const seedPotholes = [
-    {
-      id: 1,
-      lat: -7.7715,
-      lon: 110.3775,
-      report_count: 3,
-      status: 'repaired',
-      first_detected_at: '2026-05-01T08:00:00Z',
-      last_detected_at: '2026-05-01T08:00:00Z',
-      repaired_at: null,
-      validation_methods: ['camera', 'imu'],
-    },
-    {
-      id: 2,
-      lat: -7.7685,
-      lon: 110.3792,
-      report_count: 5,
-      status: 'active',
-      first_detected_at: '2026-05-07T14:23:15Z',
-      last_detected_at: '2026-05-07T14:23:15Z',
-      repaired_at: null,
-      validation_methods: ['camera', 'imu'],
-    },
-    {
-      id: 3,
-      lat: -7.7702,
-      lon: 110.3768,
-      report_count: 2,
-      status: 'active',
-      first_detected_at: '2026-05-08T09:10:00Z',
-      last_detected_at: '2026-05-08T09:10:00Z',
-      repaired_at: null,
-      validation_methods: ['camera', 'imu'],
-    },
-    {
-      id: 4,
-      lat: -7.7698,
-      lon: 110.3745,
-      report_count: 8,
-      status: 'in_progress',
-      first_detected_at: '2026-05-09T11:45:00Z',
-      last_detected_at: '2026-05-09T11:45:00Z',
-      repaired_at: null,
-      validation_methods: ['camera', 'imu'],
-    },
-    {
-      id: 5,
-      lat: -7.7710,
-      lon: 110.3760,
-      report_count: 12,
-      status: 'active',
-      first_detected_at: '2026-05-10T16:00:00Z',
-      last_detected_at: '2026-05-10T16:00:00Z',
-      repaired_at: null,
-      validation_methods: ['camera', 'imu'],
-    },
-  ];
+// Untuk pothole yang diinput manual / tanpa segment: cari segment terdekat (25 m),
+// lalu isi location_name (nama segment, atau reverse geocode) jika masih kosong.
 
-  if (isPgConnected()) {
-    // Clear & seed PostgreSQL table
-    await query('TRUNCATE TABLE potholes RESTART IDENTITY CASCADE');
-    for (const p of seedPotholes) {
-      await query(
-        `INSERT INTO potholes (lat, lon, report_count, status, first_detected_at, last_detected_at, updated_at, validation_methods)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, $7)`,
-        [p.lat, p.lon, p.report_count, p.status, p.first_detected_at, p.last_detected_at, JSON.stringify(p.validation_methods)]
-      );
-    }
-  } else {
-    memoryDb.potholes = seedPotholes.map((p) => ({
-      ...p,
-      updated_at: new Date().toISOString(),
-    }));
-    memoryDb.nextId = 6;
-  }
-
-  await fillMissingLocationMetadata();
-  try {
-    await rebuildAll();
-  } catch (error) {
-    console.warn(`[Street pin] Rebuild skipped (run npm run migrate): ${error.message}`);
-  }
-  invalidateRoadHeatCache();
-  return seedPotholes;
-}
-
-/**
- * Untuk pothole yang diinput manual / tanpa segment: cari segment terdekat (25 m),
- * lalu isi location_name (nama segment, atau reverse geocode) jika masih kosong.
- */
 async function fillMissingLocationMetadata() {
   if (!isPgConnected()) return 0;
   const rows = (await query(
@@ -442,6 +340,5 @@ module.exports = {
   getAllPotholes,
   getPotholeById,
   updatePotholeStatus,
-  seedInitialPotholes,
   fillMissingLocationMetadata,
 };
